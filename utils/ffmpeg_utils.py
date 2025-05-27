@@ -5,13 +5,12 @@ from typing import Dict, Any, Tuple
 import logging
 import re
 
+from core.config import Config
+
 logger = logging.getLogger(__name__)
 
 
 class FFmpegUtils:
-    def __init__(self, ffmpeg_path: str = "ffmpeg"):
-        self.ffmpeg_path = ffmpeg_path
-
     def run_command(self, command: list) -> subprocess.CompletedProcess:
         """Выполняет команду FFmpeg"""
         logger.debug(f"Выполнение команды FFmpeg: {' '.join(command)}")
@@ -22,169 +21,103 @@ class FFmpegUtils:
             logger.error(f"Ошибка выполнения команды FFmpeg: {e.stderr}")
             raise
 
-    def get_video_info(self, video_path: str) -> Dict[str, Any]:
-        """
-        Получает информацию о видео
-
-        Args:
-            video_path: Путь к видео файлу
-
-        Returns:
-            Словарь с информацией о видео
-        """
+    def get_video_info(self, video_path: str):
+        # Get video information using ffprobe
         cmd = [
-            self.ffmpeg_path,
-            "-i", video_path,
-            "-hide_banner",
-            "-loglevel", "error"
+            'ffprobe',
+            '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_format',
+            '-show_streams',
+            video_path
         ]
+        result = subprocess.run(cmd, capture_output=True, encoding='utf-8', text=True)
+        info = json.loads(result.stdout)
 
-        try:
-            # FFmpeg выводит информацию в stderr для команды -i
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            output = result.stderr
+        # Extract video dimensions
+        video_stream = next(s for s in info['streams'] if s['codec_type'] == 'video')
+        width = int(video_stream['width'])
+        height = int(video_stream['height'])
+        duration = float(video_stream['duration'])
 
-            # Извлекаем размеры видео
-            width_height_match = re.search(r"Stream.*Video.*\s(\d+)x(\d+)", output)
-            if width_height_match:
-                width = int(width_height_match.group(1))
-                height = int(width_height_match.group(2))
-            else:
-                width, height = 0, 0
+        return width, height, duration
 
-            # Извлекаем длительность видео
-            duration_match = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", output)
-            if duration_match:
-                hours = int(duration_match.group(1))
-                minutes = int(duration_match.group(2))
-                seconds = float(duration_match.group(3))
-                duration = hours * 3600 + minutes * 60 + seconds
-            else:
-                duration = 0.0
+    def get_video_duration(self, video_path):
+        """Get the duration of the video in seconds."""
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1',
+             video_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT
+        )
+        return float(result.stdout)
 
-            # Извлекаем FPS
-            fps_match = re.search(r"(\d+(?:\.\d+)?) fps", output)
-            fps = float(fps_match.group(1)) if fps_match else 30.0
-
-            return {
-                "width": width,
-                "height": height,
-                "duration": duration,
-                "fps": fps
-            }
-        except Exception as e:
-            logger.error(f"Ошибка получения информации о видео: {str(e)}")
-            return {
-                "width": 1920,
-                "height": 1080,
-                "duration": 60.0,
-                "fps": 30.0
-            }
-
-    def get_duration(self, media_path: str) -> float:
-        """
-        Получает длительность медиа файла
-
-        Args:
-            media_path: Путь к медиа файлу
-
-        Returns:
-            Длительность в секундах
-        """
-        cmd = [
-            self.ffmpeg_path,
-            "-i", media_path,
-            "-hide_banner",
-            "-loglevel", "error"
-        ]
-
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            output = result.stderr
-
-            duration_match = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", output)
-            if duration_match:
-                hours = int(duration_match.group(1))
-                minutes = int(duration_match.group(2))
-                seconds = float(duration_match.group(3))
-                return hours * 3600 + minutes * 60 + seconds
-            else:
-                return 0.0
-        except Exception as e:
-            logger.error(f"Ошибка получения длительности медиа: {str(e)}")
-            return 0.0
 
     def create_transition(self, clip1: str, clip2: str, output: str,
                           transition_type: str = "fade", duration: float = 0.5) -> str:
         """
-        Создает переход между двумя клипами
+        Creates a transition between two clips with support for various transition types
 
-        Args:
-            clip1: Путь к первому клипу
-            clip2: Путь ко второму клипу
-            output: Путь к выходному файлу
-            transition_type: Тип перехода (fade, wipe, slide)
-            duration: Длительность перехода в секундах
-
-        Returns:
-            Путь к выходному файлу
         """
-        # Получаем длительность первого клипа
-        clip1_info = self.get_video_info(clip1)
-        clip1_duration = clip1_info["duration"]
+        # Tuple of supported transition types
+        supported_transitions = (
+            'fade', 'dissolve', 'pixelize', 'radial', 'hblur', 'distance',
+            'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+            'slideleft', 'slideright', 'slideup', 'slidedown',
+            'diagtl', 'diagtr', 'diagbl', 'diagbr',
+            'hlslice', 'hrslice', 'vuslice', 'vdslice',
+            'circlecrop', 'rectcrop', 'circleopen', 'circleclose',
+            'fadeblack', 'fadewhite', 'fadegrays'
+        )
 
-        # Создаем фильтр для перехода
-        if transition_type == "fade":
-            filter_complex = (
-                f"[0:v]trim=0:{clip1_duration - duration},setpts=PTS-STARTPTS[v0];"
-                f"[0:v]trim={clip1_duration - duration}:{clip1_duration},setpts=PTS-STARTPTS[v1];"
-                f"[1:v]trim=0:{duration},setpts=PTS-STARTPTS[v2];"
-                f"[1:v]trim={duration},setpts=PTS-STARTPTS[v3];"
-                f"[v1][v2]xfade=transition=fade:duration={duration}:offset=0[xf];"
-                f"[v0][xf][v3]concat=n=3:v=1:a=0[outv]"
-            )
-        elif transition_type == "wipe":
-            filter_complex = (
-                f"[0:v]trim=0:{clip1_duration - duration},setpts=PTS-STARTPTS[v0];"
-                f"[0:v]trim={clip1_duration - duration}:{clip1_duration},setpts=PTS-STARTPTS[v1];"
-                f"[1:v]trim=0:{duration},setpts=PTS-STARTPTS[v2];"
-                f"[1:v]trim={duration},setpts=PTS-STARTPTS[v3];"
-                f"[v1][v2]xfade=transition=wipeleft:duration={duration}:offset=0[xf];"
-                f"[v0][xf][v3]concat=n=3:v=1:a=0[outv]"
-            )
-        elif transition_type == "slide":
-            filter_complex = (
-                f"[0:v]trim=0:{clip1_duration - duration},setpts=PTS-STARTPTS[v0];"
-                f"[0:v]trim={clip1_duration - duration}:{clip1_duration},setpts=PTS-STARTPTS[v1];"
-                f"[1:v]trim=0:{duration},setpts=PTS-STARTPTS[v2];"
-                f"[1:v]trim={duration},setpts=PTS-STARTPTS[v3];"
-                f"[v1][v2]xfade=transition=slideleft:duration={duration}:offset=0[xf];"
-                f"[v0][xf][v3]concat=n=3:v=1:a=0[outv]"
-            )
-        else:
-            # По умолчанию используем fade
-            filter_complex = (
-                f"[0:v]trim=0:{clip1_duration - duration},setpts=PTS-STARTPTS[v0];"
-                f"[0:v]trim={clip1_duration - duration}:{clip1_duration},setpts=PTS-STARTPTS[v1];"
-                f"[1:v]trim=0:{duration},setpts=PTS-STARTPTS[v2];"
-                f"[1:v]trim={duration},setpts=PTS-STARTPTS[v3];"
-                f"[v1][v2]xfade=transition=fade:duration={duration}:offset=0[xf];"
-                f"[v0][xf][v3]concat=n=3:v=1:a=0[outv]"
-            )
+        # Check if the transition type is supported
+        if transition_type not in supported_transitions:
+            raise ValueError(f"Unsupported transition type: {transition_type}. "
+                             f"Available: {', '.join(supported_transitions)}")
 
-        # Выполняем команду FFmpeg
+        # Get the duration of the first clip
+        clip1_duration = self.get_video_duration(clip1)
+
+        # Check that the transition duration does not exceed the clip duration
+        if duration >= clip1_duration:
+            raise ValueError(f"Transition duration ({duration}s) cannot be greater than or equal to "
+                             f"the duration of the first clip ({clip1_duration}s)")
+
+        # Use the transition name directly for FFmpeg
+        ffmpeg_transition = transition_type
+
+        fps = Config.OUTPUT_PTS
+
+        # Create the filter for the transition
+        filter_complex = (
+            f"[0:v]trim=0:{clip1_duration - duration},setpts=PTS-STARTPTS[v0];"
+            f"[0:v]trim={clip1_duration - duration}:{clip1_duration},setpts=PTS-STARTPTS,fps={fps},settb=AVTB[v1];"
+            f"[1:v]trim=0:{duration},setpts=PTS-STARTPTS,fps={fps},settb=AVTB[v2];"
+            f"[1:v]trim={duration},setpts=PTS-STARTPTS[v3];"
+            f"[v1][v2]xfade=transition={ffmpeg_transition}:duration={duration}:offset=0,format=yuv420p[xf];"
+            f"[v0][xf][v3]concat=n=3:v=1:a=0[outv]"
+        )
+
+        # Combine video filters (audio is not processed in this specific filter_complex)
+        full_filter = f"{filter_complex}"
+
+        # Execute the FFmpeg command
         cmd = [
-            self.ffmpeg_path,
+            'ffmpeg',
             "-i", clip1,
             "-i", clip2,
-            "-filter_complex", filter_complex,
+            "-filter_complex", full_filter,
             "-map", "[outv]",
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "22",
+            "-c:v", Config.VIDEO_CODEC,
+            "-c:a", "aac", # Audio codec is specified, though not processed by filter_complex
             "-y",
             output
         ]
 
-        self.run_command(cmd)
-        return output
+        try:
+            self.run_command(cmd)
+            return output
+        except Exception as e:
+            raise RuntimeError(f"Error creating transition: {str(e)}")
+
+

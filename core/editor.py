@@ -9,21 +9,21 @@ from processors.tts_processor import TTSProcessor
 from processors.caption_processor import CaptionProcessor
 from models.brand_kit import BrandKit
 from queue.job_manager import JobManager
+from core.config import Config
 
 logger = logging.getLogger(__name__)
 
 
 class VideoEditor:
     def __init__(self, config_path: str = "config.ini"):
-        self.config = Config(config_path)
-        self.video_processor = VideoProcessor(self.config)
-        self.tts_processor = TTSProcessor(self.config)
-        self.caption_processor = CaptionProcessor(self.config)
-        self.job_manager = JobManager(max_workers=self.config.max_workers)
+        # self.video_processor = VideoProcessor(self.config)
+        # self.tts_processor = TTSProcessor(self.config)
+        # self.caption_processor = CaptionProcessor(self.config)
+        # self.job_manager = JobManager(max_workers=self.config.max_workers)
 
         # Создаем временные директории
-        os.makedirs(self.config.temp_dir, exist_ok=True)
-        os.makedirs(self.config.output_dir, exist_ok=True)
+        os.makedirs(Config.TEMP_FOLDER, exist_ok=True)
+        os.makedirs(Config.RESULT_FOLDER, exist_ok=True)
 
     def create_video(self, title: str, script: str, brand_kit_id: str,
                      callback=None) -> str:

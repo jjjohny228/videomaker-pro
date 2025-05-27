@@ -30,7 +30,6 @@ class AudioProcessor:
             output_path = tempfile.mktemp(suffix=".mp3")
 
         cmd = [
-            self.config.ffmpeg_path,
             "-i", audio_path,
             "-filter:a", f"atempo={speed}",
             "-y", output_path
@@ -58,43 +57,55 @@ class AudioProcessor:
 
         # Получаем длительность голоса
         voice_duration = self.ffmpeg.get_duration(voice_path)
+        music_duration = self.ffmpeg.get_duration(music_path)
 
         # Формируем команду для смешивания аудио
-        cmd = [
-            self.config.ffmpeg_path,
-            "-i", voice_path,
-            "-i", music_path,
-            "-filter_complex",
-            f"[1:a]volume={music_volume},aloop=loop=-1:size=2e+09[a1];[a1]atrim=0:{voice_duration}[a2];[0:a][a2]amix=inputs=2:duration=first",
-            "-y", output_path
-        ]
+        if music_duration < voice_duration:
+            # Музыка короче голоса, нужно зациклить и обрезать
+            cmd = [
+                "-i", voice_path,
+                "-i", music_path,
+                "-filter_complex",
+                f"[1:a]volume={music_volume},aloop=loop=-1:size=2e+09[a1];[a1]atrim=0:{voice_duration}[a2];[0:a][a2]amix=inputs=2:duration=first",
+                "-y", output_path
+            ]
+        else:
+            # Музыка длиннее голоса, просто обрезаем музыку
+            cmd = [
+                "-i", voice_path,
+                "-i", music_path,
+                "-filter_complex",
+                f"[1:a]volume={music_volume},atrim=0:{voice_duration}[a1];[0:a][a1]amix=inputs=2:duration=first",
+                "-y", output_path
+            ]
+
 
         subprocess.run(cmd, check=True)
         return output_path
 
-    def normalize_audio(self, audio_path: str, output_path: str = "", target_level: float = -16.0) -> str:
-        """
-        Нормализует громкость аудио
-
-        Args:
-            audio_path: Путь к аудио файлу
-            output_path: Путь к выходному файлу
-            target_level: Целевой уровень громкости в dB
-
-        Returns:
-            Путь к нормализованному аудио файлу
-        """
-        if not output_path:
-            output_path = tempfile.mktemp(suffix=".mp3")
-
-        # Сначала измеряем текущую громкость
-        cmd_measure = [
-            self.config.ffmpeg_path,
-            "-i", audio_path,
-            "-af", "loudnorm=print_format=json",
-            "-f", "null",
-            "-"
-        ]
+    # def normalize_audio(self, audio_path: str, output_path: str = "", target_level: float = -16.0) -> str:
+    #     """
+    #     Нормализует громкость аудио
+    #
+    #     Args:
+    #         audio_path: Путь к аудио файлу
+    #         output_path: Путь к выходному файлу
+    #         target_level: Целевой уровень громкости в dB
+    #
+    #     Returns:
+    #         Путь к нормализованному аудио файлу
+    #     """
+    #     if not output_path:
+    #         output_path = tempfile.mktemp(suffix=".mp3")
+    #
+    #     # Сначала измеряем текущую громкость
+    #     cmd_measure = [
+    #         self.config.ffmpeg_path,
+    #         "-i", audio_path,
+    #         "-af", "loudnorm=print_format=json",
+    #         "-f", "null",
+    #         "-"
+    #     ]
 
         result = subprocess.run(cmd_measure, capture_output=True, text=True)
 
@@ -174,7 +185,6 @@ class AudioProcessor:
             "-c:v", "copy",  # Копируем видео без перекодирования
             "-map", "0:v",  # Берем видео из первого входного файла
             "-map", "1:a",  # Берем аудио из второго входного файла
-            "-shortest",  # Обрезаем по длине самого короткого потока
             "-y", output_path
         ]
 
