@@ -40,7 +40,7 @@ class FFmpegUtils:
         height = int(video_stream['height'])
         duration = float(video_stream['duration'])
 
-        return width, height, duration
+        return width, height
 
     def get_video_duration(self, video_path):
         """Get the duration of the video in seconds."""
@@ -119,5 +119,35 @@ class FFmpegUtils:
             return output
         except Exception as e:
             raise RuntimeError(f"Error creating transition: {str(e)}")
+
+    def normalize_video_resolution(self, input_path: str, output_path: str,
+                                   target_resolution: str = "1080:1920") -> str:
+        """
+        Нормализует разрешение видео к целевому размеру с сохранением пропорций
+
+        Args:
+            input_path: Путь к исходному видео
+            output_path: Путь к выходному файлу
+            target_resolution: Целевое разрешение в формате "WIDTHxHEIGHT"
+
+        Returns:
+            Путь к нормализованному видео
+        """
+        cmd = [
+            'ffmpeg',
+            '-i', input_path,
+            '-vf',
+            f'scale={target_resolution}:force_original_aspect_ratio=decrease,pad={target_resolution}:(ow-iw)/2:(oh-ih)/2',
+            '-c:v', Config.VIDEO_CODEC,
+            '-c:a', 'copy',
+            '-y', output_path
+        ]
+
+        try:
+            self.run_command(cmd)
+            logger.debug(f"Video normalized from {input_path} to {output_path} with resolution {target_resolution}")
+            return output_path
+        except Exception as e:
+            raise RuntimeError(f"Error normalizing video resolution: {str(e)}")
 
 
