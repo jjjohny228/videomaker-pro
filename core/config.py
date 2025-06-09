@@ -1,5 +1,7 @@
 import sys
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class Config:
     BACKGROUND_VIDEO_FOLDER = 'resource/background_videos'
@@ -25,3 +27,15 @@ class Config:
         VIDEO_CODEC = 'h264_amf'
     else:
         VIDEO_CODEC = 'libx264'
+
+    SUPPORTED_TRANSITIONS = (
+            'fade', 'dissolve', 'pixelize', 'radial', 'hblur', 'distance',
+            'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+            'slideleft', 'slideright', 'slideup', 'slidedown',
+            'diagtl', 'diagtr', 'diagbl', 'diagbr',
+            'hlslice', 'hrslice', 'vuslice', 'vdslice',
+            'circlecrop', 'rectcrop', 'circleopen', 'circleclose',
+            'fadeblack', 'fadewhite', 'fadegrays'
+        )
+
+    MINIMAX_MODEL = 'speech-02-turbo'

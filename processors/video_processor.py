@@ -6,7 +6,7 @@ import logging
 
 from core.config import Config
 from utils.ffmpeg_utils import FFmpegUtils
-# from models.brand_kit import BrandKit
+# from database.brand_kit import BrandKit
 
 logger = logging.getLogger(__name__)
 
@@ -353,7 +353,9 @@ class VideoProcessor:
             Путь к финальному видео
         """
         # Определяем соотношение сторон
-        aspect_ratio = output_settings.get("aspect_ratio", "16:9")
+        aspect_ratio = output_settings.get("aspect_ratio")
+
+        video_width, video_height = self.ffmpeg.get_video_info(video_path)
 
         if aspect_ratio == "16:9":
             width, height = 1920, 1080
@@ -362,13 +364,16 @@ class VideoProcessor:
         else:
             width, height = 1920, 1080
 
+        if video_width == width and video_height == height:
+            return self._copy_file(video_path, output_file)
+
         # Финализируем видео
         cmd = [
-            self.config.ffmpeg_path,
+            "ffmpeg",
             "-i", video_path,
             "-vf",
             f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "22",
+            "-c:v", Config.VIDEO_CODEC,
             "-c:a", "aac", "-b:a", "192k",
             "-y", output_file
         ]

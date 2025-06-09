@@ -1,14 +1,9 @@
 import os
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 from uuid import uuid4
 
-from core.config import Config
-from processors.video_processor import VideoProcessor
-from processors.tts_processor import TTSProcessor
-from processors.caption_processor import CaptionProcessor
-from models.brand_kit import BrandKit
-from queue.job_manager import JobManager
+from models import BrandKit
 from core.config import Config
 
 logger = logging.getLogger(__name__)

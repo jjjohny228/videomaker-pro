@@ -1,17 +1,17 @@
 import threading
-import queue
+import my_queue
 from typing import Dict, Any, Callable, List, Optional
 import logging
 import time
 
-from models.job import Job, JobStatus
+from database.job import Job, JobStatus
 
 logger = logging.getLogger(__name__)
 
 
 class JobManager:
     def __init__(self, max_workers: int = 2):
-        self.queue = queue.Queue()
+        self.queue = my_queue.Queue()
         self.jobs = {}  # Словарь для хранения информации о задачах
         self.max_workers = max_workers
         self.workers = []
@@ -132,7 +132,7 @@ class JobManager:
                 finally:
                     self.queue.task_done()
 
-            except queue.Empty:
+            except my_queue.Empty:
                 continue
             except Exception as e:
                 logger.exception(f"Неожиданная ошибка в рабочем потоке: {str(e)}")

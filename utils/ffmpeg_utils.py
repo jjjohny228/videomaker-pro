@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 
 class FFmpegUtils:
     def run_command(self, command: list) -> subprocess.CompletedProcess:
-        """Выполняет команду FFmpeg"""
-        logger.debug(f"Выполнение команды FFmpeg: {' '.join(command)}")
+        """Executes the FFmpeg command"""
+        logger.debug(f"Executing the FFmpeg command: {' '.join(command)}")
         try:
             result = subprocess.run(command, check=True, capture_output=True, text=True)
             return result
         except subprocess.CalledProcessError as e:
-            logger.error(f"Ошибка выполнения команды FFmpeg: {e.stderr}")
+            logger.error(f"FFmpeg command execution error: {e.stderr}")
             raise
 
     def get_video_info(self, video_path: str):
@@ -38,7 +38,6 @@ class FFmpegUtils:
         video_stream = next(s for s in info['streams'] if s['codec_type'] == 'video')
         width = int(video_stream['width'])
         height = int(video_stream['height'])
-        duration = float(video_stream['duration'])
 
         return width, height
 
@@ -59,17 +58,7 @@ class FFmpegUtils:
         Creates a transition between two clips with support for various transition types
 
         """
-        # Tuple of supported transition types
-        supported_transitions = (
-            'fade', 'dissolve', 'pixelize', 'radial', 'hblur', 'distance',
-            'wipeleft', 'wiperight', 'wipeup', 'wipedown',
-            'slideleft', 'slideright', 'slideup', 'slidedown',
-            'diagtl', 'diagtr', 'diagbl', 'diagbr',
-            'hlslice', 'hrslice', 'vuslice', 'vdslice',
-            'circlecrop', 'rectcrop', 'circleopen', 'circleclose',
-            'fadeblack', 'fadewhite', 'fadegrays'
-        )
-
+        supported_transitions = Config.SUPPORTED_TRANSITIONS
         # Check if the transition type is supported
         if transition_type not in supported_transitions:
             raise ValueError(f"Unsupported transition type: {transition_type}. "

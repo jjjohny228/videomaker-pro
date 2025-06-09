@@ -1,5 +1,5 @@
 -- Video Editor Database Schema
--- Based on Peewee models for video editing application
+-- Based on Peewee database for video editing application
 -- SQLite compatible with PostgreSQL/MySQL adaptations noted
 
 -- Enable foreign key constraints (SQLite specific)

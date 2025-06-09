@@ -30,7 +30,7 @@ class TTSProcessor:
         Returns:
             Путь к сгенерированному аудио файлу
         """
-        provider_name = voice_settings.get("provider", "edge")
+        provider_name = voice_settings.get("provider")
         voice_id = voice_settings.get("voice_id", "")
         speed = voice_settings.get("speed", 1.0)
 
