@@ -1,0 +1,209 @@
+// Video Editor Database Schema
+// Based on Peewee models for video editing application
+
+Project video_editor {
+  database_type: 'SQLite'
+  Note: '''
+    # Video Editor Database
+
+    This database manages brand kits, voice configurations,
+    transitions, and related settings for automated video editing.
+  '''
+}
+
+// Enum definitions
+Enum tts_provider {
+  minimax_t2a_turbo [note: 'Minimax T2A Turbo']
+  replicate [note: 'Replicate (Cloned Voices)']
+}
+
+Enum position_type {
+  top_left [note: 'Top Left']
+  top_center [note: 'Top Center']
+  top_right [note: 'Top Right']
+  middle_left [note: 'Middle Left']
+  middle_center [note: 'Middle Center']
+  middle_right [note: 'Middle Right']
+  bottom_left [note: 'Bottom Left']
+  bottom_center [note: 'Bottom Center']
+  bottom_right [note: 'Bottom Right']
+}
+
+Enum font_type {
+  Arial
+  Verdana
+  Tahoma
+  Georgia
+  "Times New Roman"
+  "Courier New"
+  Impact
+  "Comic Sans MS"
+  Roboto
+}
+
+Enum aspect_ratio_type {
+  "16:9" [note: 'Landscape']
+  "9:16" [note: 'Portrait']
+}
+
+Enum background_type {
+  color [note: 'Solid Color']
+  image [note: 'Background Image']
+  video [note: 'Background Video']
+}
+
+// Core tables
+Table voices {
+  id integer [pk, increment]
+  provider tts_provider [not null, note: 'TTS service provider']
+  language varchar(10) [note: 'Language code (e.g., en-US, ru-RU)']
+  voice_id varchar(100) [not null, note: 'TTS provider-specific voice ID']
+  group_id varchar(100) [not null, note: 'TTS provider-specific group ID']
+  description varchar(255) [note: 'User-friendly description of the voice']
+  speed float [not null, default: 1.0, note: 'Voice speed (0.1 to 5.0)']
+
+  indexes {
+    (provider, voice_id, group_id) [unique, name: 'unique_voice_config']
+    provider [name: 'idx_voices_provider']
+  }
+
+  Note: 'Stores voice settings for TTS (Text-to-Speech) configuration'
+}
+
+Table transitions {
+  id integer [pk, increment]
+  name varchar(50) [unique, not null, note: 'FFmpeg transition identifier']
+  description varchar(255) [note: 'User-friendly description']
+
+  Note: 'Available video transition effects for FFmpeg'
+}
+
+Table brand_kits {
+  id integer [pk, increment]
+  name varchar(255) [unique, not null, note: 'User-defined name for the brand kit']
+
+  // Media file paths
+  intro_clip_path varchar(500) [note: 'Path to intro video clip (.mp4, .mov, .avi, .mkv)']
+  watermark_path varchar(500) [note: 'Path to watermark image (.png, .jpg, .jpeg)']
+  avatar_clip_path varchar(500) [note: 'Path to animated avatar clip']
+  subscribe_cta_path varchar(500) [note: 'Path to subscribe CTA overlay (.webm, .png, .gif)']
+  music_path varchar(500) [note: 'Path to background music MP3 file']
+  lut_path varchar(500) [note: 'Path to LUT file for color grading (.cube)']
+  mask_effect_path varchar(500) [note: 'Path to mask effect file (sparks/smoke)']
+
+  // Configuration options
+  randomize_clips boolean [not null, default: false, note: 'Use clips in random order']
+  watermark_position position_type [not null, default: 'top_right']
+  avatar_position position_type [not null, default: 'bottom_left']
+  avatar_background_color char(6) [note: 'Hex color for avatar background removal']
+  subscribe_cta_interval integer [not null, default: 120, note: 'CTA display interval in seconds']
+
+  // Audio and video settings
+  voice_id integer [ref: > voices.id, note: 'Selected voice configuration']
+  aspect_ratio aspect_ratio_type [not null, default: '16:9']
+  music_volume integer [not null, default: 20, note: 'Background music volume (0-100)']
+  transition_duration float [not null, default: 0.5, note: 'Transition duration in seconds']
+
+  // Content
+  script_to_voice_over text [not null, note: 'Script for voice-over generation']
+
+  // Timestamps
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null, default: `now()`]
+
+  indexes {
+    name [name: 'idx_brand_kits_name']
+    created_at [name: 'idx_brand_kits_created']
+    updated_at [name: 'idx_brand_kits_updated']
+  }
+
+  Note: '''
+    Main brand kit configuration storing visual elements,
+    audio settings, and output preferences for video generation
+  '''
+}
+
+Table auto_intro_settings {
+  id integer [pk, increment]
+  brand_kit_id integer [unique, not null, ref: - brand_kits.id, note: 'One-to-one with brand kit']
+  enabled boolean [not null, default: true, note: 'Whether auto-intro is enabled']
+  title_font font_type [not null, default: 'Arial']
+  title_font_size integer [not null, default: 48, note: 'Font size (8-200)']
+  title_font_color char(6) [not null, default: 'FFFFFF', note: 'Hex color code']
+  title_background_type background_type [not null, default: 'color']
+  title_background_value varchar(500) [not null, default: '000000', note: 'Color code or file path']
+
+  Note: 'Settings for automatically generating intro with typewriter title effect'
+}
+
+Table captions {
+  id integer [pk, increment]
+  brand_kit_id integer [unique, not null, ref: - brand_kits.id, note: 'One-to-one with brand kit']
+  font font_type [not null, default: 'Arial']
+  font_size integer [not null, default: 24]
+  font_color char(6) [not null, default: 'FFFFFF', note: 'Hex color for caption text']
+  stroke_width integer [not null, default: 2, note: 'Text stroke width']
+  stroke_color char(6) [not null, default: '000000', note: 'Hex color for text stroke']
+  position position_type [not null, default: 'bottom_center']
+  max_words_per_line integer [not null, default: 7, note: 'Maximum words per caption line (1-20)']
+
+  Note: 'Caption styling and positioning configuration for videos'
+}
+
+Table source_videos {
+  id integer [pk, increment]
+  brand_kit_id integer [not null, ref: > brand_kits.id]
+  path varchar(500) [not null, note: 'Path to source video file (.mp4, .mov, .avi, .mkv)']
+
+  indexes {
+    brand_kit_id [name: 'idx_source_videos_brand_kit']
+  }
+
+  Note: 'Source video files associated with brand kits'
+}
+
+// Junction table for many-to-many relationship
+Table brand_kit_transitions {
+  brand_kit_id integer [not null, ref: > brand_kits.id]
+  transition_id integer [not null, ref: > transitions.id]
+
+  indexes {
+    (brand_kit_id, transition_id) [pk]
+  }
+
+  Note: 'Many-to-many relationship between brand kits and available transitions'
+}
+
+Table api_keys {
+  id integer [pk, increment]
+  service_name tts_provider [not null, note: 'TTS/AI service name']
+  api_key varchar(500) [unique, not null, note: 'API Key (encrypt in production!)']
+  is_active boolean [not null, default: true, note: 'Whether this API key is active']
+
+  indexes {
+    (service_name, is_active) [name: 'idx_api_keys_service_active']
+  }
+
+  Note: 'API keys for external TTS and AI services'
+}
+
+// Table groupings for better organization
+TableGroup core_config [color: #3498DB, note: 'Core configuration tables'] {
+  brand_kits
+  voices
+  transitions
+}
+
+TableGroup brand_kit_settings [color: #E74C3C, note: 'Brand kit specific settings'] {
+  auto_intro_settings
+  captions
+  source_videos
+}
+
+TableGroup external_services [color: #F39C12, note: 'External service integration'] {
+  api_keys
+}
+
+TableGroup relationships [color: #9B59B6, note: 'Junction tables'] {
+  brand_kit_transitions
+}
