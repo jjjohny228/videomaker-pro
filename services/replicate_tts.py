@@ -1,6 +1,6 @@
-import os
+# Chat gpt
+
 import requests
-import json
 import tempfile
 import time
 from typing import Dict, Any
