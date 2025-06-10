@@ -1,8 +1,9 @@
+# Chat gpt
+
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import logging
 
-from services.edge_tts import EdgeTTS
 from services.minimax_tts import MinimaxTTS
 from services.replicate_tts import ReplicateTTS
 
@@ -13,7 +14,6 @@ class TTSProcessor:
     def __init__(self, config):
         self.config = config
         self.providers = {
-            "edge": EdgeTTS(),
             "minimax": MinimaxTTS(config.minimax_api_key),
             "replicate": ReplicateTTS(config.replicate_api_key)
         }

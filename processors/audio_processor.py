@@ -1,6 +1,5 @@
-import os
+# Only chat gpt
 import subprocess
-from typing import Dict, Any, Optional
 import logging
 import tempfile
 
@@ -12,31 +11,7 @@ logger = logging.getLogger(__name__)
 class AudioProcessor:
     def __init__(self, config):
         self.config = config
-        self.ffmpeg = FFmpegUtils(config.ffmpeg_path)
-
-    def adjust_audio_speed(self, audio_path: str, speed: float, output_path: str = "") -> str:
-        """
-        Изменяет скорость аудио
-
-        Args:
-            audio_path: Путь к аудио файлу
-            speed: Коэффициент скорости (1.0 = нормальная)
-            output_path: Путь к выходному файлу
-
-        Returns:
-            Путь к обработанному аудио файлу
-        """
-        if not output_path:
-            output_path = tempfile.mktemp(suffix=".mp3")
-
-        cmd = [
-            "-i", audio_path,
-            "-filter:a", f"atempo={speed}",
-            "-y", output_path
-        ]
-
-        subprocess.run(cmd, check=True)
-        return output_path
+        self.ffmpeg = FFmpegUtils()
 
     def mix_audio_with_music(self, voice_path: str, music_path: str,
                              music_volume: float = 0.2, output_path: str = "") -> str:
@@ -82,63 +57,6 @@ class AudioProcessor:
 
         subprocess.run(cmd, check=True)
         return output_path
-
-    # def normalize_audio(self, audio_path: str, output_path: str = "", target_level: float = -16.0) -> str:
-    #     """
-    #     Нормализует громкость аудио
-    #
-    #     Args:
-    #         audio_path: Путь к аудио файлу
-    #         output_path: Путь к выходному файлу
-    #         target_level: Целевой уровень громкости в dB
-    #
-    #     Returns:
-    #         Путь к нормализованному аудио файлу
-    #     """
-    #     if not output_path:
-    #         output_path = tempfile.mktemp(suffix=".mp3")
-    #
-    #     # Сначала измеряем текущую громкость
-    #     cmd_measure = [
-    #         self.config.ffmpeg_path,
-    #         "-i", audio_path,
-    #         "-af", "loudnorm=print_format=json",
-    #         "-f", "null",
-    #         "-"
-    #     ]
-
-        result = subprocess.run(cmd_measure, capture_output=True, text=True)
-
-        # Извлекаем измеренные значения из вывода
-        import json
-        import re
-
-        json_match = re.search(r'\{.*\}', result.stderr, re.DOTALL)
-        if json_match:
-            loudness_stats = json.loads(json_match.group(0))
-
-            # Применяем нормализацию с учетом измеренных значений
-            cmd_normalize = [
-                self.config.ffmpeg_path,
-                "-i", audio_path,
-                "-af",
-                f"loudnorm=I={target_level}:TP=-1.0:LRA=11:measured_I={loudness_stats.get('input_i', 0)}:measured_TP={loudness_stats.get('input_tp', 0)}:measured_LRA={loudness_stats.get('input_lra', 0)}:measured_thresh={loudness_stats.get('input_thresh', 0)}:offset={loudness_stats.get('target_offset', 0)}:linear=true:print_format=summary",
-                "-y", output_path
-            ]
-
-            subprocess.run(cmd_normalize, check=True)
-            return output_path
-        else:
-            # Если не удалось получить статистику, применяем простую нормализацию
-            cmd_simple = [
-                self.config.ffmpeg_path,
-                "-i", audio_path,
-                "-af", f"loudnorm=I={target_level}:TP=-1.0:LRA=11",
-                "-y", output_path
-            ]
-
-            subprocess.run(cmd_simple, check=True)
-            return output_path
 
     def extract_audio_from_video(self, video_path: str, output_path: str = "") -> str:
         """
