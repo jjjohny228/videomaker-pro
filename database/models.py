@@ -2,14 +2,10 @@ import datetime
 import os
 
 import peewee as pw
-from pathlib import Path
-from enum import Enum  # For JobStatus # Not used yet, but kept for the future Job model
 
-# from typing import Dict, Any
-# from datetime import datetime
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-print(BASE_DIR)
-DATABASE_PATH = os.path.join(BASE_DIR, 'video_editor.db')
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATABASE_PATH = os.path.join(PROJECT_ROOT, 'video_editor.db')
 
 # --- Database Setup (Example using SQLite) ---
 db = pw.SqliteDatabase(DATABASE_PATH)
@@ -285,9 +281,9 @@ class SourceVideos(_BaseModel):
     """
     brand_kit = pw.ForeignKeyField(BrandKit, backref='source_videos',
                                    help_text="The BrandKit for which this videos is selected.")
-    path = pw.CharField(constraints=[pw.Check("avatar_clip_path LIKE '%.mp4' OR avatar_clip_path LIKE '%.mov' "
-                                              "OR avatar_clip_path LIKE '%.avi' OR avatar_clip_path LIKE '%.mkv' "
-                                              "OR avatar_clip_path IS NULL")
+    path = pw.CharField(constraints=[pw.Check("path LIKE '%.mp4' OR path LIKE '%.mov' "
+                                              "OR path LIKE '%.avi' OR path LIKE '%.mkv' "
+                                              "OR path IS NULL")
                                      ],
                         help_text="Path to a video")
 
