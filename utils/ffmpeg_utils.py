@@ -1,9 +1,6 @@
 import subprocess
 import json
-import os
-from typing import Dict, Any, Tuple
 import logging
-import re
 
 from core.config import Config
 
@@ -11,7 +8,8 @@ logger = logging.getLogger(__name__)
 
 
 class FFmpegUtils:
-    def run_command(self, command: list) -> subprocess.CompletedProcess:
+    @staticmethod
+    def run_command(command: list) -> subprocess.CompletedProcess:
         """Executes the FFmpeg command"""
         logger.debug(f"Executing the FFmpeg command: {' '.join(command)}")
         try:
@@ -21,7 +19,8 @@ class FFmpegUtils:
             logger.error(f"FFmpeg command execution error: {e.stderr}")
             raise
 
-    def get_video_info(self, video_path: str):
+    @staticmethod
+    def get_video_info(video_path: str):
         # Get video information using ffprobe
         cmd = [
             'ffprobe',
@@ -41,7 +40,8 @@ class FFmpegUtils:
 
         return width, height
 
-    def get_video_duration(self, video_path):
+    @staticmethod
+    def get_video_duration(video_path):
         """Get the duration of the video in seconds."""
         result = subprocess.run(
             ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1',

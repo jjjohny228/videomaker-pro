@@ -1,6 +1,6 @@
-import os
-from typing import List, Dict, Any
-import math
+# Gpt generated
+
+from typing import List
 
 
 def format_time(seconds: float) -> str:
