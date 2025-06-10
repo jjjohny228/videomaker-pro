@@ -1,7 +1,7 @@
 # services/brand_kit_service.py
 from typing import Optional, Dict, Any, List
 import os
-from models import (
+from database.models import (
     BrandKit, AutoIntroSetting, Caption, Voice, Transition,
     BrandKitTransition, db
 )
