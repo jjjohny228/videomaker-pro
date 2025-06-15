@@ -969,8 +969,3 @@ class VideoEditorMaxApp:
             widget.destroy()
         self.error_display.hide()
 
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = VideoEditorMaxApp(root)
-    root.mainloop()
