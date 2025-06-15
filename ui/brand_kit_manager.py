@@ -560,8 +560,8 @@ class BrandKitEditor(tk.Toplevel):
                 'avatar_clip_path': self.avatar_path_var.get() or None,
                 'avatar_position': self.avatar_position_var.get(),
                 'avatar_background_color': self.avatar_background_color_var.get(),
-                'subscribe_cta_path': self.cta_path_var.get() or None,
-                'subscribe_cta_interval': self.cta_interval_var.get(),
+                'cta_path': self.cta_path_var.get() or None,
+                'cta_interval': self.cta_interval_var.get(),
                 'music_path': self.music_path_var.get() or None,
                 'music_volume': self.music_volume_var.get(),
                 'lut_path': self.lut_path_var.get() or None,
@@ -906,7 +906,7 @@ class VideoEditorMaxApp:
             voices_data = []
             self.error_display.show_error(f"Ошибка загрузки голосов: {str(e)}")
 
-        columns = ["provider", "language", "voice_id", "description", "speed"]
+        columns = ["provider", "language_code", "voice_id", "description", "speed"]
         actions = ["Delete"]
 
         self.voice_table = SimpleTable(frame, columns, voices_data, actions, [self.delete_voice])
