@@ -11,14 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 class TTSProcessor:
-    def __init__(self, config):
-        self.config = config
-        self.providers = {
-            "minimax": MinimaxTTS(config.minimax_api_key),
-            "replicate": ReplicateTTS(config.replicate_api_key)
-        }
+    def __init__(self, brand_kit):
+        self.brand_kit = brand_kit
+        self.voice_config = brand_kit.voice
+        self.tts_provider = MinimaxTTS(self.voice_config) if self.voice_config.provider == 'minimax' \
+            else ReplicateTTS(self.voice_config)
 
-    def generate_audio(self, text: str, voice_settings: Dict[str, Any], output_dir: str) -> str:
+    def generate_audio(self, script: str) -> str:
         """
         Генерирует аудио из текста
 

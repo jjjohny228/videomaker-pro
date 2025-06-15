@@ -8,7 +8,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATABASE_PATH = os.path.join(PROJECT_ROOT, 'video_editor.db')
 
 # --- Database Setup (Example using SQLite) ---
-db = pw.SqliteDatabase(DATABASE_PATH)
+db = pw.SqliteDatabase(DATABASE_PATH, pragmas={'foreign_keys': 1})
 
 
 class _BaseModel(pw.Model):
@@ -30,8 +30,12 @@ CAPTION_FONT_CHOICES = [
     ('Impact', 'Impact'), ('Comic Sans MS', 'Comic Sans MS'), ('Roboto', 'Roboto'),
 ]
 
+CAPTION_POSITION_CHOICES = [
+    ('bottom_center', 'Bottom Center'), ('center', 'Center')
+]
+
 TTS_PROVIDER_CHOICES = [
-    ('minimax_t2a_turbo', 'Minimax T2A Turbo'),
+    ('minimax', 'Minimax T2A Turbo'),
     ('replicate', 'Replicate (Cloned Voices)'),
 ]
 
@@ -41,7 +45,6 @@ class Voice(_BaseModel):
 
     """
     provider = pw.CharField(choices=TTS_PROVIDER_CHOICES, help_text="TTS service provider.")
-    language = pw.CharField(help_text="Language code (e.g., en-US, ru-RU).")
     voice_id = pw.CharField(help_text="TTS provider-specific voice ID.")
     group_id = pw.CharField(help_text="TTS provider-specific group ID.")
     description = pw.CharField(null=True, help_text="User-friendly description of the voice.")
@@ -53,7 +56,7 @@ class Voice(_BaseModel):
 
     def __str__(self):
         provider_display = self.get_provider_display() if hasattr(self, 'get_provider_display') else self.provider
-        return f"{provider_display} - {self.language or 'N/A'} - ID: {self.voice_id}"
+        return f"{provider_display} - ID: {self.voice_id}"
 
 
 class BrandKit(_BaseModel):
@@ -85,15 +88,16 @@ class BrandKit(_BaseModel):
                                    help_text="Position of the avatar on the screen.")
     avatar_background_color = pw.CharField(null=True, max_length=6, help_text="Background color of the avatar video to cut out it (6 hex characters).",
                                            constraints=[pw.Check('LENGTH(avatar_background_color) = 6')])
-    subscribe_cta_path = pw.CharField(null=True,
+    cta_path = pw.CharField(null=True,
                  constraints=[
                      pw.Check(
-                         "subscribe_cta_path LIKE '%.webm' OR subscribe_cta_path LIKE '%.png' OR subscribe_cta_path LIKE '%.gif' OR subscribe_cta_path IS NULL")
+                         "cta_path LIKE '%.webm' OR cta_path LIKE '%.png' OR cta_path LIKE '%.gif' OR cta_path IS NULL")
                  ],
                  help_text="Path to a WebM/PNG subscribe call-to-action overlay with transparency.")
-    subscribe_cta_interval = pw.IntegerField(default=120,
+    cta_interval = pw.IntegerField(default=120,
                                              help_text="Interval (in seconds) for displaying the subscribe CTA overlay.")
-
+    cta_position = pw.IntegerField(default="bottom_left", choices=POSITION_CHOICES,
+                                   help_text="Position of the cta on the screen.")
     voice = pw.ForeignKeyField(Voice, backref='used_by_brand_kits', null=True, on_delete='SET NULL',
                                help_text="Selected voice configuration for TTS.")
 
@@ -105,8 +109,11 @@ class BrandKit(_BaseModel):
                             help_text="Path to a LUT file for color grading (e.g., .cube). Applied to all clips except the intro.")
     mask_effect_path = pw.CharField(null=True,
                                     help_text="Path to a video/image file for a mask effect (e.g., sparks/smoke via alpha channel).")
+    mask_effect_background_color = pw.CharField(null=True,
+                                    help_text="Background color of the mask (6 hex characters).")
     transition_duration = pw.FloatField(default=0.5, help_text="Duration of the transition between clips (in seconds).")
     script_to_voice_over = pw.TextField(help_text="Script to voice over")
+    language_code = pw.CharField(default="en", help_text="Language code for the brand kit (e.g., en, ru).")
 
     created_at = pw.DateTimeField(default=datetime.datetime.now, help_text="Date and time of record creation.")
     updated_at = pw.DateTimeField(default=datetime.datetime.now, help_text="Date and time of the last record update.")
@@ -198,7 +205,7 @@ class Caption(_BaseModel):
     Intended for a One-to-One relationship with BrandKit.
     """
     brand_kit = pw.ForeignKeyField(BrandKit, backref='caption_specification', on_delete='CASCADE',
-                                   help_text="The BrandKit these caption specifications belong to.")
+                                   help_text="The BrandKit these caption specifications belong to.", unique=True)
     font = pw.CharField(default="Arial", choices=CAPTION_FONT_CHOICES, help_text="Font for captions.")
     font_size = pw.IntegerField(default=24, help_text="Font size for captions.")
     font_color = pw.CharField(default="FFFFFF", constraints=[pw.Check(
@@ -207,7 +214,7 @@ class Caption(_BaseModel):
     stroke_color = pw.CharField(default="000000", constraints=[pw.Check(
             "length(stroke_color) = 6 AND stroke_color GLOB '[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]'")],
                                 help_text="Hex color code for caption text stroke (e.g., 000000 for black).")
-    position = pw.CharField(default="bottom_center", choices=POSITION_CHOICES,
+    position = pw.CharField(default="bottom_center", choices=CAPTION_POSITION_CHOICES,
                             help_text="Position of captions on the screen (9 grid options).")
     max_words_per_line = pw.IntegerField(default=7,  constraints=[pw.Check('max_words_per_line >= 1 AND max_words_per_line <= 20')], help_text="Maximum number of words per caption line.")
 
@@ -256,7 +263,7 @@ class BrandKitTransition(_BaseModel):
         primary_key = pw.CompositeKey('brand_kit', 'transition')  # Ensures the (brand_kit, transition) pair is unique
 
 
-class ApiKey(_BaseModel):
+class VoiceOverApiKey(_BaseModel):
     """
     Stores API keys for external services.
     This model stores them in plaintext for simplicity of this example.
@@ -273,7 +280,19 @@ class ApiKey(_BaseModel):
         return f"Key for {service_display} ({status_display})"
 
     class Meta:
-        table_name = 'api_keys'
+        table_name = 'voice_over_api_keys'
+
+
+class AssemblyAiApiKey(_BaseModel):
+    """
+    Stores API keys for AssemblyAi.
+    """
+    api_key = pw.CharField(unique=True, help_text="API Key (store encrypted in production!)")
+    is_active = pw.BooleanField(default=True, help_text="Whether this API key is currently active.")
+
+    class Meta:
+        table_name = 'assembly_api_keys'
+
 
 class SourceVideos(_BaseModel):
     """

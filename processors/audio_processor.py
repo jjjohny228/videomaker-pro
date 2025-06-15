@@ -3,6 +3,7 @@ import subprocess
 import logging
 import tempfile
 
+from mutagen import File
 from utils.ffmpeg_utils import FFmpegUtils
 
 logger = logging.getLogger(__name__)
@@ -108,3 +109,11 @@ class AudioProcessor:
 
         subprocess.run(cmd, check=True)
         return output_path
+    
+    @staticmethod
+    def get_audio_length(filepath):
+        audio = File(filepath)
+        if audio is not None and audio.info is not None:
+            return audio.info.length
+        else:
+            raise ValueError("The length of the audio file could not be determined.")

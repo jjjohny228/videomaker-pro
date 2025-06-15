@@ -1,4 +1,6 @@
 import os
+import time
+
 import requests
 import json
 import tempfile
@@ -8,73 +10,22 @@ from mutagen import File as MutagenFile
 
 from aiohttp.abc import HTTPException
 
+from core.config import Config
+
 logger = logging.getLogger(__name__)
 
 
 class MinimaxTTS:
-    def __init__(self):
-        pass
+    def __init__(self, voice_config):
+        self.voice_config = voice_config
+        self.temp_dir = Config.TEMP_FOLDER
 
-    def generate_audio(self, text: str, voice_id: str = "", speed: float = 1.0, output_file: str = "") -> str:
-        """
-        Генерирует аудио из текста с помощью Minimax TTS
-
-        Args:
-            text: Текст для преобразования в речь
-            voice_id: Идентификатор голоса
-            speed: Скорость речи (1.0 = нормальная)
-            output_file: Путь к выходному файлу
-
-        Returns:
-            Путь к сгенерированному аудио файлу
-        """
-        if not self.api_key:
-            raise ValueError("API ключ Minimax не указан")
-
-        if not output_file:
-            output_file = tempfile.mktemp(suffix=".mp3")
-
-        # Если voice_id не указан, используем голос по умолчанию
-        if not voice_id:
-            voice_id = "male-qn-qingse"  # Голос по умолчанию
-
-        # Формируем запрос
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "text": text,
-            "model": "speech-01",
-            "voice_id": voice_id,
-            "speed": speed
-        }
-
-        try:
-            # Отправляем запрос
-            response = requests.post(self.api_url, headers=headers, json=data)
-            response.raise_for_status()
-
-            # Получаем аудио данные
-            audio_data = response.content
-
-            # Сохраняем в файл
-            with open(output_file, "wb") as f:
-                f.write(audio_data)
-
-            logger.info(f"Аудио успешно сгенерировано: {output_file}")
-            return output_file
-        except requests.RequestException as e:
-            logger.error(f"Ошибка запроса к Minimax API: {str(e)}")
-            raise RuntimeError(f"Не удалось сгенерировать аудио: {str(e)}")
-
-    def create_voice_over_from_text(self, text: str, group_id: int, api_key: str, voice_id: str,
+    def generate_audio(self, text: str, group_id: int, api_key: str, voice_id: str,
                                     out_path: str, speed: float = 1.0):
         """
-        Создает озвучку из текста с помощью клонированного голоса.
+        Voiceover script
         """
-        # Валидация длины текста (например, до 200000 символов)
+        output_file = f'{self.temp_dir}/{int(time.time())}_tts.mp4'
         if len(text) > 200000:
             raise ValueError("Text is too long (max 200,000 characters).")
         url = f'https://api.minimaxi.chat/v1/t2a_v2?GroupId={group_id}'
@@ -116,18 +67,44 @@ class MinimaxTTS:
             return
 
         parsed_json = json.loads(response.text)
-        # Предполагаем, что в ответе есть ссылка на аудиофайл
         audio_value = bytes.fromhex(parsed_json['data']['audio'])
         if not audio_value:
             raise RuntimeError("No audio in response: %s" % response.text)
         with open(out_path, 'wb') as f:
             f.write(audio_value)
+        return out_path
+
+    def clone_voice(self, audio_path, group_id, api_key, voice_id):
+        """
+        Clones a voice based on the uploaded file.
+        voice_id: minimum 8 characters, letters and numbers, starts with a letter.
+        """
+
+        custom_voice_file_id = self._upload_cloned_voice(audio_path, group_id, api_key)
+        if len(voice_id) < 8 or not voice_id[0].isalpha() or not any(c.isdigit() for c in voice_id):
+            raise ValueError("voice_id must be at least 8 chars, start with a letter, contain letters and numbers.")
+        url = f"https://api.minimaxi.chat/v1/voice_clone?GroupId={group_id}"
+        payload = json.dumps({
+            "file_id": custom_voice_file_id,
+            "voice_id": voice_id
+        })
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        response = requests.post(url, headers=headers, data=payload)
+        response.raise_for_status()
+        resp_json = response.json()
+        if resp_json.get("base_resp", {}).get("status_code") != 0:
+            raise RuntimeError("Voice clone failed: %s" % resp_json)
+        return voice_id
 
     @staticmethod
     def _upload_cloned_voice(audio_path, group_id, api_key):
         """
-        Загружает аудиофайл на MiniMax для клонирования голоса.
-        Валидация: формат MP3/M4A/WAV, длительность 10 сек – 5 мин, размер < 20MB.
+        Uploads an audio file to MiniMax for voice cloning.
+        Validation: MP3/M4A/WAV format, duration 10 sec - 5 min, size < 20MB.Clones the voice based on the uploaded file.
+        voice_id: minimum 8 characters, letters and numbers, starts with a letter.
         """
         # Валидация файла
         allowed_ext = ('.mp3', '.m4a', '.wav')
@@ -162,28 +139,3 @@ class MinimaxTTS:
         if not file_id:
             raise RuntimeError("File upload failed: %s" % response.text)
         return file_id
-
-    def clone_voice(self, audio_path, group_id, api_key, voice_id):
-        """
-        Клонирует голос на основе загруженного файла.
-        voice_id: минимум 8 символов, буквы и цифры, начинается с буквы.
-        """
-
-        custom_voice_file_id = self._upload_cloned_voice(audio_path, group_id, api_key)
-        if len(voice_id) < 8 or not voice_id[0].isalpha() or not any(c.isdigit() for c in voice_id):
-            raise ValueError("voice_id must be at least 8 chars, start with a letter, contain letters and numbers.")
-        url = f"https://api.minimaxi.chat/v1/voice_clone?GroupId={group_id}"
-        payload = json.dumps({
-            "file_id": custom_voice_file_id,
-            "voice_id": voice_id
-        })
-        headers = {
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        }
-        response = requests.post(url, headers=headers, data=payload)
-        response.raise_for_status()
-        resp_json = response.json()
-        if resp_json.get("base_resp", {}).get("status_code") != 0:
-            raise RuntimeError("Voice clone failed: %s" % resp_json)
-        return voice_id

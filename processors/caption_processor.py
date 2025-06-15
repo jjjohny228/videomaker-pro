@@ -1,92 +1,100 @@
-# Chat gpt
 import os
-import re
-from typing import Dict, Any, List
-import logging
 import subprocess
+import logging
+import time
+from core.config import Config
+from database.functions import get_active_assembly_ai_api_key
 
-from utils.subtitle_utils import generate_ass_subtitles, generate_typewriter_effect
+from utils.subtitle_utils import (
+    generate_subtitles,
+    parse_srt,
+    generate_ass_subtitles_from_segments
+)
 
 logger = logging.getLogger(__name__)
 
-
 class CaptionProcessor:
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, brand_kit):
+        self.brand_kit = brand_kit
+        self.caption_specification = brand_kit.caption_config
+        self.temp_dir = Config.TEMP_FOLDER
 
-    def add_captions(self, video_path: str, script: str, caption_specs: Dict[str, Any], temp_dir: str) -> str:
+    def add_captions(self, audio_path: str, video_path: str) -> str:
         """
-        Добавляет субтитры к видео
-
-        Args:
-            video_path: Путь к видео
-            script: Текст скрипта
-            caption_specs: Настройки субтитров
-            temp_dir: Временная директория
-
-        Returns:
-            Путь к видео с субтитрами
+        Transcribes audio, generates styled ASS subtitles, and adds them to the video.
         """
-        output_file = os.path.join(temp_dir, "captioned.mp4")
-
-        # Разбиваем скрипт на предложения
-        sentences = self._split_into_sentences(script)
-
-        # Создаем файл субтитров
-        subtitle_file = os.path.join(temp_dir, "subtitles.ass")
-
-        # Получаем длительность видео
-        cmd = [
-            self.config.ffmpeg_path,
-            "-i", video_path,
-            "-hide_banner",
-            "-loglevel", "error"
-        ]
-
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        output = result.stderr
-
-        duration_match = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", output)
-        if duration_match:
-            hours = int(duration_match.group(1))
-            minutes = int(duration_match.group(2))
-            seconds = float(duration_match.group(3))
-            duration = hours * 3600 + minutes * 60 + seconds
-        else:
-            duration = 0.0
-
-        # Генерируем субтитры
-        generate_ass_subtitles(
-            sentences,
-            subtitle_file,
-            duration,
-            font=caption_specs.get("font", "Arial"),
-            font_size=caption_specs.get("font_size", 24),
-            color=caption_specs.get("color", "&HFFFFFF"),
-            stroke_width=caption_specs.get("stroke", 2),
-            stroke_color=caption_specs.get("stroke_color", "&H000000"),
-            alignment=caption_specs.get("position", 2),
-            max_words_per_line=caption_specs.get("max_words_per_line", 7)
+        # Transcribe audio to SRT
+        srt_file = os.path.join(self.temp_dir, f"{int(time.time())}_srt_temp.srt")
+        language_code = self.brand_kit.language_code
+        assemblyai_api_key = get_active_assembly_ai_api_key()
+        generate_subtitles(
+            audio_file_path=audio_path,
+            language_code=language_code,
+            output_file=srt_file,
+            assemblyai_api_key=assemblyai_api_key
         )
 
-        # Добавляем субтитры к видео
+        # Parse SRT to segments
+        segments = parse_srt(srt_file)
+
+        # Prepare ASS styling
+        font = self.caption_specification.font
+        font_size = self.caption_specification.font_size
+        color = self.caption_specification.font_color
+        stroke_width = self.caption_specification.stroke_width
+        stroke_color = self.caption_specification.stroke_color
+        alignment = self._get_alignment_from_position(self.caption_specification.position)
+        margin_v = self._get_margin_v(font_size, self.caption_specification.position)
+        max_words_per_line = self.caption_specification.max_words_per_line
+
+        # Generate ASS file
+        ass_file = os.path.join(self.temp_dir, f"{int(time.time())}_subtitles.ass")
+        generate_ass_subtitles_from_segments(
+            segments,
+            ass_file,
+            font=font,
+            font_size=font_size,
+            color=color,
+            stroke_width=stroke_width,
+            stroke_color=stroke_color,
+            alignment=alignment,
+            margin_v=margin_v,
+            max_words_per_line=max_words_per_line
+        )
+
+        # Add subtitles to video
+        output_file = os.path.join(self.temp_dir, f"{int(time.time())}_captioned.mp4")
         cmd = [
-            self.config.ffmpeg_path,
+            "ffmpeg",
             "-i", video_path,
-            "-vf", f"ass={subtitle_file}",
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "22",
+            "-vf", f"ass={ass_file}",
+            "-c:v", Config.VIDEO_CODEC,
             "-c:a", "copy",
             "-y",
             output_file
         ]
-
         subprocess.run(cmd, check=True)
+        os.remove(srt_file)
+        os.remove(ass_file)
         return output_file
 
-    def _split_into_sentences(self, text: str) -> List[str]:
-        """Разбивает текст на предложения"""
-        # Простой алгоритм разделения на предложения
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        return [s.strip() for s in sentences if s.strip()]
+    @staticmethod
+    def _get_alignment_from_position(position: str) -> int:
+        """
+        Converts position string to ASS alignment number.
+        """
+        mapping = {
+            "bottom_center": 2,
+            "center": 5
+        }
+        return mapping.get(position, 2)
+
+    @staticmethod
+    def _get_margin_v(font_size: int, position: str) -> int:
+        """
+        Calculates vertical margin for subtitles based on font size and position.
+        """
+        if position == "center":
+            return 20
+        elif position == "bottom_center":
+            return int(font_size * 2.5)

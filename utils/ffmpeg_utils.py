@@ -51,7 +51,6 @@ class FFmpegUtils:
         )
         return float(result.stdout)
 
-
     def create_transition(self, clip1: str, clip2: str, output: str,
                           transition_type: str = "fade", duration: float = 0.5) -> str:
         """
