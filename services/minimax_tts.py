@@ -3,14 +3,12 @@ import time
 
 import requests
 import json
-import tempfile
-from typing import Dict, Any
 import logging
 from mutagen import File as MutagenFile
-
 from aiohttp.abc import HTTPException
 
 from core.config import Config
+from database.functions import get_active_voice_over_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -20,18 +18,22 @@ class MinimaxTTS:
         self.voice_config = voice_config
         self.temp_dir = Config.TEMP_FOLDER
 
-    def generate_audio(self, text: str, group_id: int, api_key: str, voice_id: str,
-                                    out_path: str, speed: float = 1.0):
+    def generate_audio(self, script: str):
         """
         Voiceover script
         """
-        output_file = f'{self.temp_dir}/{int(time.time())}_tts.mp4'
-        if len(text) > 200000:
+        output_file = f'{self.temp_dir}/{int(time.time())}_minimax_tts.mp3'
+        active_api_key = get_active_voice_over_api_key('minimax')
+        group_id = active_api_key.group_id
+        voice_id = self.voice_config.voice_id
+        speed = self.voice_config.speed
+        api_key = active_api_key.api_key
+        if len(script) > 200000:
             raise ValueError("Text is too long (max 200,000 characters).")
         url = f'https://api.minimaxi.chat/v1/t2a_v2?GroupId={group_id}'
         payload = {
             "model": "speech-02-turbo",
-            "text": text,
+            "text": script,
             "stream": False,
             "voice_setting":{
                 "voice_id":voice_id,
@@ -51,10 +53,8 @@ class MinimaxTTS:
             'Content-Type': 'application/json'
         }
         response = requests.post(url, headers=headers, json=payload)
-        print(response.content)
         try:
             response.raise_for_status()
-            print(response.raise_for_status())
         except HTTPException as e:
             logger.error(f'Raised error during minimax voice over creation: {e}')
 
@@ -70,9 +70,9 @@ class MinimaxTTS:
         audio_value = bytes.fromhex(parsed_json['data']['audio'])
         if not audio_value:
             raise RuntimeError("No audio in response: %s" % response.text)
-        with open(out_path, 'wb') as f:
+        with open(output_file, 'wb') as f:
             f.write(audio_value)
-        return out_path
+        return output_file
 
     def clone_voice(self, audio_path, group_id, api_key, voice_id):
         """

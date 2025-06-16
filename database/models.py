@@ -44,15 +44,14 @@ class Voice(_BaseModel):
     Stores voice settings for TTS.
 
     """
-    provider = pw.CharField(choices=TTS_PROVIDER_CHOICES, help_text="TTS service provider.")
+    provider = pw.CharField(choices=TTS_PROVIDER_CHOICES, help_text="TTS provider.")
     voice_id = pw.CharField(help_text="TTS provider-specific voice ID.")
-    group_id = pw.CharField(help_text="TTS provider-specific group ID.")
     description = pw.CharField(null=True, help_text="User-friendly description of the voice.")
     speed = pw.FloatField(default=1.0, constraints=[pw.Check('speed >= 0.1 AND speed <= 5.0')], help_text="Voice speed (e.g., from 0.5 to 2.0).")
 
     class Meta:
         table_name = 'voices'
-        constraints = [pw.SQL('UNIQUE (provider, voice_id, group_id)')]  # The pair (provider, voice_id, group_id) must be unique
+        constraints = [pw.SQL('UNIQUE (provider, voice_id)')]  # The pair (provider, voice_id) must be unique
 
     def __str__(self):
         provider_display = self.get_provider_display() if hasattr(self, 'get_provider_display') else self.provider
@@ -268,16 +267,15 @@ class VoiceOverApiKey(_BaseModel):
     Stores API keys for external services.
     This model stores them in plaintext for simplicity of this example.
     """
-    service_name = pw.CharField(choices=TTS_PROVIDER_CHOICES, help_text="Name of the TTS/AI service.")
+    provider = pw.CharField(choices=TTS_PROVIDER_CHOICES, help_text="Name of the TTS/AI service.")
     api_key = pw.CharField(unique=True, help_text="API Key (store encrypted in production!)")
     is_active = pw.BooleanField(default=True, help_text="Whether this API key is currently active.")
+    group_id = pw.IntegerField(unique=False, help_text="Group ID for this API key.")
 
     def get_display_name(self):
         """ Returns a safe-to-display name for the key. """
-        service_display = self.get_service_name_display() if hasattr(self,
-                                                                     'get_service_name_display') else self.service_name
         status_display = 'Active' if self.is_active else 'Inactive'
-        return f"Key for {service_display} ({status_display})"
+        return f"Key for {self.provider} ({status_display})"
 
     class Meta:
         table_name = 'voice_over_api_keys'

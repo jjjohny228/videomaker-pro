@@ -6,6 +6,7 @@ import logging
 
 from services.minimax_tts import MinimaxTTS
 from services.replicate_tts import ReplicateTTS
+from database.functions import get_active_voice_over_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -17,32 +18,10 @@ class TTSProcessor:
         self.tts_provider = MinimaxTTS(self.voice_config) if self.voice_config.provider == 'minimax' \
             else ReplicateTTS(self.voice_config)
 
-    def generate_audio(self, script: str) -> str:
+    def generate_audio(self) -> str:
         """
-        Генерирует аудио из текста
+        Generates audio from text using Minimax or Replicat services.
 
-        Args:
-            text: Текст для преобразования в речь
-            voice_settings: Настройки голоса
-            output_dir: Директория для сохранения аудио
-
-        Returns:
-            Путь к сгенерированному аудио файлу
         """
-        provider_name = voice_settings.get("provider")
-        voice_id = voice_settings.get("voice_id", "")
-        speed = voice_settings.get("speed", 1.0)
-
-        if provider_name not in self.providers:
-            raise ValueError(f"Неизвестный провайдер TTS: {provider_name}")
-
-        provider = self.providers[provider_name]
-        output_file = os.path.join(output_dir, "speech.mp3")
-
-        try:
-            return provider.generate_audio(text, voice_id, speed, output_file)
-        except Exception as e:
-            logger.error(f"Ошибка генерации аудио: {str(e)}")
-            # Если основной провайдер не сработал, пробуем запасной вариант
-            fallback_provider = self.providers["edge"]
-            return fallback_provider.generate_audio(text, "", speed, output_file)
+        result_file = self.tts_provider.generate_audio(script=self.brand_kit.script_to_voice_over)
+        return result_file
