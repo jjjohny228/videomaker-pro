@@ -2,6 +2,8 @@ import os
 import re
 from typing import List
 
+import assemblyai as aai
+
 def generate_subtitles(
     audio_file_path: str,
     language_code: str,
@@ -11,7 +13,6 @@ def generate_subtitles(
     """
     Transcribes audio to SRT subtitles using AssemblyAI.
     """
-    import assemblyai as aai
     aai.settings.api_key = assemblyai_api_key
     aai.settings.base_url = "https://api.eu.assemblyai.com"
     if not aai.settings.api_key:
