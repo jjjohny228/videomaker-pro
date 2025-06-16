@@ -20,7 +20,7 @@ class _BaseModel(pw.Model):
 
 POSITION_CHOICES = [
     ('top_left', 'Top Left'), ('top_center', 'Top Center'), ('top_right', 'Top Right'),
-    ('middle_left', 'Middle Left'), ('middle_center', 'Middle Center'), ('middle_right', 'Middle Right'),
+    ('center', 'Center'),
     ('bottom_left', 'Bottom Left'), ('bottom_center', 'Bottom Center'), ('bottom_right', 'Bottom Right'),
 ]
 
@@ -77,16 +77,18 @@ class BrandKit(_BaseModel):
                                   help_text="Path to a 16:9 PNG watermark image with transparency.")
     watermark_position = pw.CharField(default="top_right", choices=POSITION_CHOICES,
                                       help_text="Position of the watermark on the screen.")
-    avatar_clip_path = pw.CharField(null=True,
+    watermark_width_persent = pw.IntegerField(default=50, help_text="Persent of the width to calculate watermark dimensions")
+    avatar_path = pw.CharField(null=True,
                                     constraints=[
                                         pw.Check(
-                                            "avatar_clip_path LIKE '%.mp4' OR avatar_clip_path LIKE '%.mov' OR avatar_clip_path LIKE '%.avi' OR avatar_clip_path LIKE '%.mkv' OR avatar_clip_path IS NULL")
+                                            "avatar_path LIKE '%.mp4' OR avatar_path LIKE '%.mov' OR avatar_path LIKE '%.avi' OR avatar_path LIKE '%.mkv' OR avatar_path IS NULL")
                                     ],
                                     help_text="Path to an animated looped avatar clip (e.g., talking head).")
     avatar_position = pw.CharField(default="bottom_left", choices=POSITION_CHOICES,
                                    help_text="Position of the avatar on the screen.")
     avatar_background_color = pw.CharField(null=True, max_length=6, help_text="Background color of the avatar video to cut out it (6 hex characters).",
                                            constraints=[pw.Check('LENGTH(avatar_background_color) = 6')])
+    avatar_width_persent = pw.IntegerField(default=50, help_text="Persent of the width to calculate avatar dimensions")
     cta_path = pw.CharField(null=True,
                  constraints=[
                      pw.Check(
@@ -97,6 +99,8 @@ class BrandKit(_BaseModel):
                                              help_text="Interval (in seconds) for displaying the subscribe CTA overlay.")
     cta_position = pw.IntegerField(default="bottom_left", choices=POSITION_CHOICES,
                                    help_text="Position of the cta on the screen.")
+    cta_width_persent = pw.IntegerField(default=50, help_text="Persent of the width to calculate cta dimensions")
+    cta_duration = pw.IntegerField(default=60, help_text="Duration of the cta overlay.")
     voice = pw.ForeignKeyField(Voice, backref='used_by_brand_kits', null=True, on_delete='SET NULL',
                                help_text="Selected voice configuration for TTS.")
 
@@ -133,32 +137,26 @@ class BrandKit(_BaseModel):
         except Caption.DoesNotExist:
             return None
 
-    def ensure_related_objects(self):
-        """ Ensures related setting objects are created when a BrandKit is first saved. """
-        if self.id:
-            if not self.auto_intro_settings:
-                AutoIntroSetting.create(brand_kit=self)
-            if not self.caption_config:
-                Caption.create(brand_kit=self)
-            # Voice logic: if BrandKit references Voice, BrandKit needs to
-            # select an existing Voice or trigger the creation of a new one and then link to it.
-            # Example: setting a default voice if not selected
-            # if not self.voice:
-            #     default_voice, created = Voice.get_or_create(
-            #         provider='edge_tts',
-            #         language='en-US',
-            #         voice_id='default-male-system',
-            #         defaults={'speed': 1.0}
-            #     )
-            #     self.voice = default_voice
-            #     # self.save() # Would require saving BrandKit again if self.voice was modified here
+    @property
+    def transition_names(self):
+        """
+        Returns a list of the names of all transitions for this BrandKit.
+        """
+        return [t.name for t in
+                Transition.select()
+                .join(BrandKitTransition)
+                .where(BrandKitTransition.brand_kit == self)]
+
+    @property
+    def source_videos_paths(self):
+        """
+        Returns a list of the paths of all source videos for this BrandKit.
+        """
+        return [t.path for t in self.source_videos]
 
     def save(self, *args, **kwargs):
         self.updated_at = datetime.datetime.now()
-        is_new = not self.id  # Check if the object is being created (still no ID)
         super_save_result = super().save(*args, **kwargs)
-        if is_new:  # If it's a new BrandKit, create related entities
-            self.ensure_related_objects()
         return super_save_result
 
     def __str__(self):
@@ -177,22 +175,23 @@ class AutoIntroSetting(_BaseModel):
     """
     brand_kit = pw.ForeignKeyField(BrandKit, backref='auto_intro_setting_ref', on_delete='CASCADE',
                                    help_text="The BrandKit these intro settings belong to.")
-    enabled = pw.BooleanField(default=True, help_text="Whether the auto-intro is enabled.")
+    text = pw.TextField(help_text="The intro text.")
     title_font = pw.CharField(default="Arial", choices=CAPTION_FONT_CHOICES, help_text="Font for the title.")
     title_font_size = pw.IntegerField(default=48, constraints=[pw.Check('title_font_size >= 8 AND title_font_size <= 200')], help_text="Font size for the title.")
     title_font_color = pw.CharField(default="FFFFFF", constraints=[pw.Check(
             "length(title_font_color) = 6 AND title_font_color GLOB '[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]'")],
                                     help_text="Hex color code for the title font (e.g., FFFFFF for white).")
 
-    title_background_type = pw.CharField(
+    background_type = pw.CharField(
         default="color",
         choices=[('color', 'Color'), ('image', 'Image'), ('video', 'Video')],
         help_text="Type of background for the auto intro title."
     )
-    title_background_value = pw.CharField(
+    background_value = pw.CharField(
         default="000000",
         help_text="Hex color code, or path to background image/video file."
     )
+    duration = pw.IntegerField(default=5, help_text="Duration of the auto-intro title in seconds.")
 
     class Meta:
         table_name = 'auto_intro_settings'

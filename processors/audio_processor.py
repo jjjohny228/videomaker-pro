@@ -1,6 +1,7 @@
 import logging
 import time
 
+from database.models import BrandKit
 from utils.ffmpeg_utils import FFmpegUtils
 from utils.audio_utils import get_audio_duration
 from core.config import Config
@@ -8,7 +9,7 @@ from core.config import Config
 logger = logging.getLogger(__name__)
 
 class AudioProcessor:
-    def __init__(self, brand_kit):
+    def __init__(self, brand_kit: BrandKit):
         self.brand_kit = brand_kit
         self.ffmpeg = FFmpegUtils()
         self.temp_dir = Config.TEMP_FOLDER

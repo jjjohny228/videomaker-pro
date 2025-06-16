@@ -138,4 +138,11 @@ class FFmpegUtils:
         except Exception as e:
             raise RuntimeError(f"Error normalizing video resolution: {str(e)}")
 
+    @staticmethod
+    def copy_file(src: str, dst: str) -> str:
+        """Копирует файл из src в dst"""
+        import shutil
+        shutil.copy2(src, dst)
+        return dst
+
 

@@ -4,6 +4,7 @@ import logging
 import time
 from core.config import Config
 from database.functions import get_active_assembly_ai_api_key
+from database.models import BrandKit
 
 from utils.subtitle_utils import (
     generate_subtitles,
@@ -14,7 +15,7 @@ from utils.subtitle_utils import (
 logger = logging.getLogger(__name__)
 
 class CaptionProcessor:
-    def __init__(self, brand_kit):
+    def __init__(self, brand_kit: BrandKit):
         self.brand_kit = brand_kit
         self.caption_specification = brand_kit.caption_config
         self.temp_dir = Config.TEMP_FOLDER
