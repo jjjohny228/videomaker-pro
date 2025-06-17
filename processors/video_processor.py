@@ -1,5 +1,6 @@
 import os
 import random
+import shutil
 import subprocess
 import time
 from typing import List, Dict, Any, Optional
@@ -305,46 +306,64 @@ class VideoProcessor:
             os.remove(file)
         return result_file
 
-    def finalize_video(self, video_path: str, output_settings: Dict[str, Any], output_file: str) -> str:
-        """
-        Финализирует видео (коррекция соотношения сторон, финальное кодирование)
+    def join_intro_with_main_parts(self, intro_path: str, video_path: str) -> str:
+        """Fallback method that processes video and audio separately"""
+        temp_intro = f'temp/{int(time.time())}_temp_intro.mp4'
+        temp_main_video = f'temp/{int(time.time())}_temp_main_video.mp4'
+        output_file = f'{Config.RESULT_FOLDER}/{int(time.time())}_final_video.mp4'
 
-        Args:
-            video_path: Путь к видео
-            output_settings: Настройки вывода
-            output_file: Путь к выходному файлу
+        transition_type = random.choice(self.brand_kit.transition_names)
+        transition_duration = self.brand_kit.transition_duration
+        intro_duration = self.ffmpeg.get_video_duration(intro_path)
+        offset = intro_duration - transition_duration
+        width, height = self._get_resolution_from_aspect_ratio()
+        normalized_intro = self.ffmpeg.normalize_video_resolution(intro_path, temp_intro, f'{width}:{height}')
+        normalized_main_video = self.ffmpeg.normalize_video_resolution(intro_path, temp_intro, f'{width}:{height}')
+        temp_files = []
+        try:
+            # First, create video crossfade only
+            video_cmd = [
+                'ffmpeg',
+                "-i", normalized_intro,
+                "-i", normalized_main_video,
+                "-filter_complex",
+                f"[0:v][1:v]xfade=transition={transition_type}:duration={transition_duration}:offset={offset}",
+                "-c:v", "libx264",
+                "-an",  # No audio
+                "-y",
+                temp_main_video
+            ]
 
-        Returns:
-            Путь к финальному видео
-        """
-        # Определяем соотношение сторон
-        aspect_ratio = output_settings.get("aspect_ratio")
+            self.ffmpeg.run_command(video_cmd)
 
-        video_width, video_height = self.ffmpeg.get_video_info(video_path)
+            # Then, add audio crossfade
+            final_cmd = [
+                'ffmpeg',
+                "-i", temp_main_video,
+                "-i", normalized_intro,
+                "-i", normalized_main_video,
+                "-filter_complex",
+                f"[1:a][2:a]acrossfade=d={transition_duration}[a]",
+                "-map", "0:v",
+                "-map", "[a]",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-y",
+                output_file
+            ]
 
-        if aspect_ratio == "16:9":
-            width, height = 1920, 1080
-        elif aspect_ratio == "9:16":
-            width, height = 1080, 1920
-        else:
-            width, height = 1920, 1080
+            self.ffmpeg.run_command(final_cmd)
 
-        if video_width == width and video_height == height:
-            return self.ffmpeg.copy_file(video_path, output_file)
+            # Clean up temp file
+            temp_files = [temp_main_video, normalized_intro, normalized_main_video]
 
-        # Финализируем видео
-        cmd = [
-            "ffmpeg",
-            "-i", video_path,
-            "-vf",
-            f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
-            "-c:v", Config.VIDEO_CODEC,
-            "-c:a", "aac", "-b:a", "192k",
-            "-y", output_file
-        ]
+            return output_file
 
-        subprocess.run(cmd, check=True)
-        return output_file
+        except Exception as e:
+            raise RuntimeError(f"Fallback method failed: {str(e)}")
+        finally:
+            for temp_file in temp_files:
+                os.remove(temp_file)
 
     def _get_resolution_from_aspect_ratio(self) -> tuple:
         """

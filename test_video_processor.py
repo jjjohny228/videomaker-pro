@@ -15,8 +15,10 @@ def test_apply_effects():
     test_video = VideoProcessor(brand_kit)
     test_video.apply_effects('tests/videos/ssstik.io_@movie.mafia2_1748542876264.mp4')
 
-def test_finalize_video():
+def test_join_intro_with_main_parts():
     test_video = VideoProcessor(brand_kit)
-    test_video.finalize_video('tests/effects.mp4', {'aspect_ratio': '9:16'}, 'tests/result.mov')
+    test_video.join_intro_with_main_parts('temp/1750068999_intro.mp4', 'temp/1750069094_intro.mp4')
+
+
 if __name__ == '__main__':
-    test_apply_effects()
+    test_join_intro_with_main_parts()
