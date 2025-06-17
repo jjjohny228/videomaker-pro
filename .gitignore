@@ -8,3 +8,4 @@ resource/
 video_editor.db
 temp/
 result
+*.log

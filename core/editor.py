@@ -4,6 +4,7 @@ from processors.audio_processor import AudioProcessor
 from processors.caption_processor import CaptionProcessor
 from database.models import BrandKit
 
+
 class VideoEditor:
     def __init__(self, brandkit_name):
         self.brandkit = BrandKit.get(BrandKit.name == brandkit_name)
@@ -46,7 +47,12 @@ class VideoEditor:
 
         content_clips = self._get_content_clips(randomize)
         transition_types = [t.name for t in transitions]
-        content_video = self.video_processor.prepare_content_clips(content_clips, transition_types, transition_duration, duration=tts_audio_duration)
+        content_video = self.video_processor.prepare_content_clips(
+            content_clips,
+            transition_types,
+            transition_duration,
+            duration=tts_audio_duration,
+        )
 
         # Apply LUT and mask only to content video (not intro)
         processed_content = content_video
@@ -57,24 +63,30 @@ class VideoEditor:
 
         # Concatenate intro and processed content
         if intro_path:
-            full_video = self.video_processor.concat_videos([intro_path, processed_content])
+            full_video = self.video_processor.concat_videos(
+                [intro_path, processed_content]
+            )
         else:
             full_video = processed_content
 
         captioned_video = self.caption_processor.add_captions(full_video, tts_audio)
-        audio_video = self.audio_processor.mix_audio_with_music(tts_audio, music, music_vol)
-        final_audio_video = self.audio_processor.replace_audio_in_video(captioned_video, audio_video)
+        audio_video = self.audio_processor.mix_audio_with_music(
+            tts_audio, music, music_vol
+        )
+        final_audio_video = self.audio_processor.replace_audio_in_video(
+            captioned_video, audio_video
+        )
         finalized_video = self.video_processor.finalize_video(final_audio_video, aspect)
 
         overlays = {
-            'avatar': avatar,
-            'avatar_position': avatar_pos,
-            'avatar_bg_color': avatar_bg,
-            'watermark': watermark,
-            'watermark_position': watermark_pos,
-            'cta': cta,
-            'cta_position': cta_pos,
-            'cta_interval': cta_interval,
+            "avatar": avatar,
+            "avatar_position": avatar_pos,
+            "avatar_bg_color": avatar_bg,
+            "watermark": watermark,
+            "watermark_position": watermark_pos,
+            "cta": cta,
+            "cta_position": cta_pos,
+            "cta_interval": cta_interval,
         }
         final_video = self.video_processor.add_overlays(finalized_video, overlays)
         return final_video
@@ -84,5 +96,6 @@ class VideoEditor:
         clips = [clip.file_path for clip in self.brandkit.content_clips]
         if randomize:
             import random
+
             random.shuffle(clips)
         return clips
